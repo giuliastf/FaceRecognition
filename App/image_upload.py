@@ -67,6 +67,12 @@ def upload_and_recognize_image():
             messagebox.showinfo("Result", "No faces detected in the image.")
             return
         
+        # Calculate adaptive text scale based on image dimensions
+        img_height, img_width = img.shape[:2]
+        base_scale = min(img_width, img_height) / 1000.0  # Scale factor based on image size
+        font_scale = max(0.4, min(1.2, base_scale))  # Keep between 0.4 and 1.2
+        font_thickness = max(1, int(font_scale * 2))
+        
         # Recognize faces
         for (x, y, w, h) in faces:
             # Extract face region
@@ -81,8 +87,11 @@ def upload_and_recognize_image():
             print(f"[DEBUG] Recognition result: ID={id_}, Confidence={confidence}")
             print(f"[DEBUG] Available labels: {labels_dict}")
             
+            # Calculate adaptive rectangle thickness based on face size
+            rect_thickness = max(1, int(w / 100))
+            
             # Draw rectangle and label
-            cv2.rectangle(img, (x, y), (x+w, y+h), (255, 0, 0), 2)
+            cv2.rectangle(img, (x, y), (x+w, y+h), (255, 0, 0), rect_thickness)
             
             # Handle ID=-1 (no match found)
             if id_ == -1:
@@ -103,12 +112,52 @@ def upload_and_recognize_image():
                 label = f"Unknown (conf: {confidence:.1f})"
                 color = (0, 0, 255)  # Red for unknown
                 print(f"[DEBUG] Not recognized - confidence too low: {confidence}")
-                
-            cv2.putText(img, label, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+            
+            # Get text size for positioning and background
+            (text_width, text_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 
+                                                                   font_scale, font_thickness)
+            
+            # Position text above face, with background for better readability
+            text_x = x
+            text_y = y - 10
+            
+            # If text would go above image, put it below the top of rectangle
+            if text_y - text_height < 0:
+                text_y = y + text_height + 10
+            
+            # Draw background rectangle for text
+            cv2.rectangle(img, (text_x, text_y - text_height - 5), 
+                         (text_x + text_width + 5, text_y + 5), (0, 0, 0), -1)
+            
+            # Draw text
+            cv2.putText(img, label, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 
+                       font_scale, color, font_thickness)
+        
+        # Add instruction text at the bottom of the image
+        h_img, w_img = img.shape[:2]
+        instruction_text = "Press any key or click 'X' to close"
+        text_size = cv2.getTextSize(instruction_text, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)[0]
+        text_x = (w_img - text_size[0]) // 2
+        text_y = h_img - 20
+        
+        # Add a background rectangle for better visibility
+        cv2.rectangle(img, (text_x - 10, text_y - text_size[1] - 10), 
+                     (text_x + text_size[0] + 10, text_y + 10), (0, 0, 0), -1)
+        cv2.putText(img, instruction_text, (text_x, text_y), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         
         # Display result
-        cv2.imshow('Face Recognition Result', img)
-        cv2.waitKey(0)
+        window_name = 'Face Recognition Result'
+        cv2.imshow(window_name, img)
+        
+        # Wait for key press or window close
+        while True:
+            key = cv2.waitKey(100)  # Check every 100ms
+            if key != -1:  # Any key pressed
+                break
+            if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:  # Window closed
+                break
+        
         cv2.destroyAllWindows()
         
         messagebox.showinfo("Success", f"Found {len(faces)} face(s) in the image.")
