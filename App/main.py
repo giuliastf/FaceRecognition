@@ -6,9 +6,6 @@ from face_training import train_model
 from face_recognizer import recognize_faces
 import os
 
-def start_recognition_thread():
-    Thread(target=recognize_faces).start()
-
 def create_main_ui():
     root = tk.Tk()
     
@@ -65,7 +62,7 @@ def create_main_ui():
     train_button = tk.Button(main_frame, text="Train Model", command=lambda: Thread(target=train_model).start(), **button_style)
     train_button.pack(pady=8)
 
-    recognize_button = tk.Button(main_frame, text="Recognize Faces", command=start_recognition_thread, **button_style)
+    recognize_button = tk.Button(main_frame, text="Recognize Faces", command=recognize_faces, **button_style)
     recognize_button.pack(pady=8)
 
     upload_button = tk.Button(main_frame, text="Upload and Scan Image", command=upload_and_recognize_image, **button_style)

@@ -62,9 +62,12 @@ def recognize_faces():
             cv2.putText(img, str(name), (x + 5, y - 5), font, 1, (255, 255, 255), 2)
             cv2.putText(img, str(confidence_text), (x + 5, y + h - 5), font, 1, (255, 255, 0), 1)
 
+        # Add instruction text
+        cv2.putText(img, "Press any key to exit", (10, 30), font, 0.7, (255, 255, 255), 2)
+        
         cv2.imshow('camera', img)
-        k = cv2.waitKey(10) & 0xFF  # Press 'ESC' for exiting video
-        if k == 27:
+        k = cv2.waitKey(10) & 0xFF
+        if k != 255:  # Any key pressed (255 means no key)
             break
 
     cam.release()
