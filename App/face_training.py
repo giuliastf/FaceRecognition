@@ -4,24 +4,58 @@ from PIL import Image
 import numpy as np
 import pickle
 from tkinter import messagebox
+from face_training_eigen import train_eigenfaces_model
 
 def train_model():
+    """Train both LBPH and Eigenfaces models"""
+    print("\n" + "="*60)
+    print("MULTI-ALGORITHM TRAINING: LBPH + EIGENFACES")
+    print("="*60)
+    
+    # Train LBPH model
+    success_lbph = train_lbph_model()
+    
+    # Train Eigenfaces model
+    success_eigen = train_eigenfaces_model()
+    
+    # Show combined result
+    if success_lbph and success_eigen:
+        messagebox.showinfo("Training Complete", 
+                           "Both models trained successfully!\n\n"
+                           "✓ LBPH (Local Binary Patterns)\n"
+                           "✓ Eigenfaces (PCA)\n\n"
+                           "You can now compare both algorithms.")
+    elif success_lbph:
+        messagebox.showwarning("Partial Success", 
+                              "LBPH model trained successfully.\n"
+                              "Eigenfaces training failed.")
+    elif success_eigen:
+        messagebox.showwarning("Partial Success", 
+                              "Eigenfaces model trained successfully.\n"
+                              "LBPH training failed.")
+    else:
+        messagebox.showerror("Training Failed", 
+                            "Both models failed to train.")
+
+def train_lbph_model():
+    """Train LBPH (Local Binary Patterns Histogram) model"""
+    print("\n[LBPH] Starting LBPH training...")
     dataset_path = os.path.join('dataset')
-    trainer_path = os.path.join('trainer', 'trainer.yml')
+    trainer_path = os.path.join('trainer', 'trainer_lbph.yml')
     labels_path = os.path.join('trainer', 'labels.pickle')
 
     # Check if dataset folder exists and has content
     if not os.path.exists(dataset_path):
         messagebox.showerror("Error", "No dataset folder found. Please collect images first.")
-        return
+        return False
     
     # List available people in dataset
     people = [d for d in os.listdir(dataset_path) if os.path.isdir(os.path.join(dataset_path, d))]
     if not people:
         messagebox.showerror("Error", "No people found in dataset. Please collect images first.")
-        return
+        return False
     
-    print(f"[INFO] Training with people: {people}")
+    print(f"[LBPH] Training with people: {people}")
 
     # Create LBPH recognizer
     recognizer = cv2.face.LBPHFaceRecognizer_create()
@@ -42,7 +76,7 @@ def train_model():
         
         # Create CLAHE object for preprocessing  
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-        print("[INFO] Using CLAHE preprocessing for better lighting normalization")
+        print("[LBPH] Using CLAHE preprocessing for better lighting normalization")
 
         for root, dirs, files in os.walk(path):
             for dir_name in dirs:
@@ -54,7 +88,6 @@ def train_model():
                 for file in os.listdir(dir_path):
                     if file.endswith(".jpg"):
                         imagePath = os.path.join(dir_path, file)
-                        print(f"[INFO] Processing file: {imagePath}")
                         PIL_img = Image.open(imagePath).convert("L")  # grayscale
                         img_numpy = np.array(PIL_img, "uint8")
                         faces = detector.detectMultiScale(img_numpy)
@@ -82,4 +115,8 @@ def train_model():
     with open(labels_path, 'wb') as f:
         pickle.dump(labels_dict, f)
 
-    messagebox.showinfo("Info", "Training complete. Model and labels saved.")
+    print(f"[LBPH] Model saved to {trainer_path}")
+    print(f"[LBPH] Labels saved to {labels_path}")
+    print(f"[LBPH] Training complete for {len(people)} people")
+    
+    return True

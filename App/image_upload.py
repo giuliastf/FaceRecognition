@@ -3,9 +3,14 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 import numpy as np
 import os
+from recognition_unified import recognize_face_unified, format_comparison_text, get_algorithm
 
 def upload_and_recognize_image():
     print("[DEBUG] upload_and_recognize_image called")
+    
+    # Get selected algorithm
+    algorithm = get_algorithm()
+    print(f"[INFO] Using algorithm: {algorithm}")
     # Open file dialog to select image
     file_path = filedialog.askopenfilename(
         title="Select Image",
@@ -20,28 +25,6 @@ def upload_and_recognize_image():
     
     try:
         print("[DEBUG] Entering try block")
-        # Load the trained model
-        trainer_path = os.path.join('trainer', 'trainer.yml')
-        labels_path = os.path.join('trainer', 'labels.pickle')
-        print(f"[DEBUG] Trainer path: {trainer_path}, exists: {os.path.exists(trainer_path)}")
-        print(f"[DEBUG] Labels path: {labels_path}, exists: {os.path.exists(labels_path)}")
-        if not os.path.exists(trainer_path):
-            messagebox.showerror("Error", "No trained model found. Please train the model first.")
-            return
-            
-        print("[DEBUG] Creating recognizer")
-        recognizer = cv2.face.LBPHFaceRecognizer_create()
-        print("[DEBUG] Recognizer created, now reading model file")
-        recognizer.read(trainer_path)
-        print("[DEBUG] Model loaded successfully")
-        
-        # Load the name labels
-        labels_dict = {}
-        if os.path.exists(labels_path):
-            import pickle
-            with open(labels_path, 'rb') as f:
-                labels_dict = pickle.load(f)
-                labels_dict = {v: k for k, v in labels_dict.items()}  # Invert: id -> name
         
         # Load face cascade
         face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
@@ -78,60 +61,61 @@ def upload_and_recognize_image():
             # Extract face region
             face_roi = gray[y:y+h, x:x+w]
             
-            # Apply same preprocessing as training
-            face_enhanced = clahe.apply(face_roi)
-            face_resized = cv2.resize(face_enhanced, (150, 150))
-            
-            id_, confidence = recognizer.predict(face_resized)
-            
-            print(f"[DEBUG] Recognition result: ID={id_}, Confidence={confidence}")
-            print(f"[DEBUG] Available labels: {labels_dict}")
-            
             # Calculate adaptive rectangle thickness based on face size
             rect_thickness = max(1, int(w / 100))
             
-            # Draw rectangle and label
+            # Draw rectangle
             cv2.rectangle(img, (x, y), (x+w, y+h), (255, 0, 0), rect_thickness)
             
-            # Handle ID=-1 (no match found)
-            if id_ == -1:
-                label = "Unknown Person"
-                color = (0, 0, 255)  # Red
-                print(f"[DEBUG] Face not in training data (ID=-1)")
-            elif confidence < 80:  # High confidence - good match
-                name = labels_dict.get(id_, f"Unknown_ID_{id_}")
-                label = f"{name} ({confidence:.1f})"
-                color = (0, 255, 0)  # Green for confident recognition
-                print(f"[DEBUG] Recognized as: {name} (HIGH CONFIDENCE)")
-            elif confidence < 100:  # Medium confidence - likely correct but uncertain
-                name = labels_dict.get(id_, f"Unknown_ID_{id_}")
-                label = f"{name}? ({confidence:.1f})"
-                color = (0, 165, 255)  # Orange for uncertain
-                print(f"[DEBUG] Recognized as: {name} (UNCERTAIN)")
-            else:  # Low confidence - probably wrong
-                label = f"Unknown (conf: {confidence:.1f})"
-                color = (0, 0, 255)  # Red for unknown
-                print(f"[DEBUG] Not recognized - confidence too low: {confidence}")
+            # Use unified recognition
+            if algorithm == "Both":
+                # Comparison mode
+                results, combined_label, combined_color = recognize_face_unified(face_roi, clahe, algorithm)
+                
+                # Format text for display
+                text_lines = format_comparison_text(results, font_scale=font_scale)
+                
+                # Draw each line with background
+                y_offset = y - 10
+                for text, color in text_lines:
+                    (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 
+                                                                           font_scale, font_thickness)
+                    
+                    # Draw background
+                    cv2.rectangle(img, (x, y_offset - text_height - 5), 
+                                 (x + text_width + 5, y_offset + 5), (0, 0, 0), -1)
+                    
+                    # Draw text
+                    cv2.putText(img, text, (x, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 
+                               font_scale, color, font_thickness)
+                    
+                    y_offset -= text_height + 10
+                    
+            else:
+                # Single algorithm mode
+                id_, confidence, name, label, color = recognize_face_unified(face_roi, clahe, algorithm)
             
-            # Get text size for positioning and background
-            (text_width, text_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 
-                                                                   font_scale, font_thickness)
+                print(f"[DEBUG] Recognition result: {name}, Confidence={confidence}")
             
-            # Position text above face, with background for better readability
-            text_x = x
-            text_y = y - 10
+                # Get text size for positioning and background
+                (text_width, text_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 
+                                                                       font_scale, font_thickness)
             
-            # If text would go above image, put it below the top of rectangle
-            if text_y - text_height < 0:
-                text_y = y + text_height + 10
+                # Position text above face, with background for better readability
+                text_x = x
+                text_y = y - 10
             
-            # Draw background rectangle for text
-            cv2.rectangle(img, (text_x, text_y - text_height - 5), 
-                         (text_x + text_width + 5, text_y + 5), (0, 0, 0), -1)
+                # If text would go above image, put it below the top of rectangle
+                if text_y - text_height < 0:
+                    text_y = y + text_height + 10
             
-            # Draw text
-            cv2.putText(img, label, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 
-                       font_scale, color, font_thickness)
+                # Draw background rectangle for text
+                cv2.rectangle(img, (text_x, text_y - text_height - 5), 
+                             (text_x + text_width + 5, text_y + 5), (0, 0, 0), -1)
+            
+                # Draw text
+                cv2.putText(img, label, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 
+                           font_scale, color, font_thickness)
         
         # Add instruction text at the bottom of the image
         h_img, w_img = img.shape[:2]

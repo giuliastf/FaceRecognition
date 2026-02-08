@@ -1,16 +1,15 @@
 import cv2
 import numpy as np
 import pickle
+from recognition_unified import recognize_face_unified, format_comparison_text, get_algorithm
 
 def recognize_faces():
     print("Starting face recognition...")
-    recognizer = cv2.face.LBPHFaceRecognizer_create()
-    recognizer.read("trainer/trainer.yml")
-
-    with open("trainer/labels.pickle", 'rb') as f:
-        labels_dict = pickle.load(f)
-        labels_dict = {v: k for k, v in labels_dict.items()}  # Invert the dictionary
-
+    
+    # Check which algorithm is selected
+    algorithm = get_algorithm()
+    print(f"[INFO] Using algorithm: {algorithm}")
+    
     face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
     
     # Create CLAHE object for preprocessing (same as training)
@@ -46,24 +45,36 @@ def recognize_faces():
             # Extract face region
             face_roi = gray[y:y + h, x:x + w]
             
-            # Apply same preprocessing as training
-            face_enhanced = clahe.apply(face_roi)
-            face_resized = cv2.resize(face_enhanced, (150, 150))
-            
-            id_, confidence = recognizer.predict(face_resized)
-
-            if confidence < 120:  # Adjusted threshold for CLAHE preprocessing
-                name = labels_dict.get(id_, "Unknown")
-                confidence_text = f"  {round(100 - confidence)}%"
+            # Use unified recognition
+            if algorithm == "Both":
+                # Comparison mode - show both results
+                results, combined_label, combined_color = recognize_face_unified(face_roi, clahe, algorithm)
+                
+                # Format text for display
+                text_lines = format_comparison_text(results, font_scale=0.5)
+                
+                # Draw each line
+                y_offset = y - 10
+                for text, color in text_lines:
+                    cv2.putText(img, text, (x + 5, y_offset), font, 0.5, color, 1)
+                    y_offset -= 20
+                    
             else:
-                name = "Unknown"
-                confidence_text = f"  {round(100 - confidence)}%"
-
-            cv2.putText(img, str(name), (x + 5, y - 5), font, 1, (255, 255, 255), 2)
-            cv2.putText(img, str(confidence_text), (x + 5, y + h - 5), font, 1, (255, 255, 0), 1)
+                # Single algorithm mode
+                id_, confidence, name, label, color = recognize_face_unified(face_roi, clahe, algorithm)
+                
+                cv2.putText(img, label, (x + 5, y - 5), font, 0.7, color, 2)
+                
+                # Add algorithm indicator
+                algo_text = f"[{algorithm[:4]}]"
+                cv2.putText(img, algo_text, (x + 5, y + h + 20), font, 0.5, (255, 255, 255), 1)
 
         # Add instruction text
         cv2.putText(img, "Press any key to exit", (10, 30), font, 0.7, (255, 255, 255), 2)
+        
+        # Add algorithm indicator at top
+        algo_indicator = f"Algorithm: {algorithm}"
+        cv2.putText(img, algo_indicator, (10, 60), font, 0.6, (0, 255, 255), 2)
         
         cv2.imshow('camera', img)
         k = cv2.waitKey(10) & 0xFF
