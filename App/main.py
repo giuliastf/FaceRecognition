@@ -11,62 +11,6 @@ import os
 # Global variable for algorithm selection
 algorithm_var = None
 
-def show_eigenfaces_visualization():
-    """Show eigenfaces visualization window"""
-    from face_training_eigen import load_eigenfaces_model
-    import cv2
-    import numpy as np
-    from tkinter import messagebox
-    
-    model_path = 'trainer/trainer_eigen.pkl'
-    if not os.path.exists(model_path):
-        messagebox.showerror("Error", "No Eigenfaces model found. Please train the model first.")
-        return
-    
-    model = load_eigenfaces_model(model_path)
-    if model is None or not model.person_models:
-        messagebox.showerror("Error", "Failed to load Eigenfaces model.")
-        return
-    
-    # Create visualization
-    print("[INFO] Generating Eigenfaces visualization...")
-    
-    for person_id in sorted(model.person_models.keys()):
-        person_name = model.person_models[person_id]['person_name']
-        mean_face, eigenfaces = model.get_eigenfaces(person_id, max_components=5)
-        
-        if mean_face is None:
-            continue
-        
-        # Create combined image
-        num_faces = len(eigenfaces) + 1
-        combined_width = mean_face.shape[1] * num_faces
-        combined_height = mean_face.shape[0]
-        combined_img = np.zeros((combined_height, combined_width))
-        
-        # Add mean face
-        combined_img[:, 0:mean_face.shape[1]] = mean_face
-        
-        # Add eigenfaces
-        for i, eigenface in enumerate(eigenfaces):
-            x_offset = (i + 1) * mean_face.shape[1]
-            combined_img[:, x_offset:x_offset + eigenface.shape[1]] = eigenface
-        
-        # Convert to uint8 and add labels
-        combined_img = (combined_img * 255).astype(np.uint8)
-        combined_img_color = cv2.cvtColor(combined_img, cv2.COLOR_GRAY2BGR)
-        
-        # Add title
-        cv2.putText(combined_img_color, f"{person_name} - Mean Face + Eigenfaces", 
-                   (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        
-        # Show window
-        cv2.imshow(f'Eigenfaces - {person_name}', combined_img_color)
-    
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-    messagebox.showinfo("Info", "Eigenfaces visualization complete.")
-
 def create_main_ui():
     global algorithm_var
     
@@ -163,11 +107,6 @@ def create_main_ui():
 
     upload_button = tk.Button(main_frame, text="Upload and Scan Image", command=upload_and_recognize_image, **button_style)
     upload_button.pack(pady=8)
-    
-    # New button for Eigenfaces visualization
-    eigenfaces_button = tk.Button(main_frame, text="Show Eigenfaces (Ghost Faces)", 
-                                  command=show_eigenfaces_visualization, **button_style)
-    eigenfaces_button.pack(pady=8)
 
     root.mainloop()
 
